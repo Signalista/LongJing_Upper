@@ -1,0 +1,211 @@
+#pragma once
+
+#include "Config.h"
+void runAxisControl(BLDCMotor& motor,
+                    bool axisSleep,
+                    uint8_t axisMode,
+                    float velocityTarget,
+                    float absolutePositionTarget,
+                    float torqueCurrentTarget);
+
+// ============================================================
+// MT6701 SSI 编码器类声明
+// 具体实现放在 Encoder.ino
+// ============================================================
+
+class MT6701SSI : public Sensor {
+  public:
+    MT6701SSI(uint8_t csPin, SPIClass* spiBus);
+    void init() override;
+    float getSensorAngle() override;
+
+  private:
+    uint8_t _csPin;
+    SPIClass* _spiBus;
+    float _angle;
+
+    uint32_t readRaw24();
+};
+
+// ============================================================
+// 全局对象声明
+// ============================================================
+
+extern SPIClass spiBus;
+
+extern MT6701SSI sensorA;
+extern MT6701SSI sensorB;
+extern MT6701SSI sensorC;
+
+extern BLDCDriver3PWM driverA;
+extern BLDCDriver3PWM driverB;
+extern BLDCDriver3PWM driverC;
+
+extern BLDCMotor motorA;
+extern BLDCMotor motorB;
+extern BLDCMotor motorC;
+
+extern Preferences zeroPrefs;
+
+#if ENABLE_BLE
+extern BLEServer* bleServer;
+extern BLECharacteristic* txCharacteristic;
+extern BLECharacteristic* rxCharacteristic;
+extern bool bleDeviceConnected;
+#endif
+
+#if WIFI_MODE != WIFI_MODE_OFF
+extern WiFiServer wifiServer;
+extern WiFiClient wifiClient;
+extern String wifiRxBuffer;
+#endif
+
+extern String serialRxBuffer;
+
+// ============================================================
+// Flash 零位运行变量
+// ============================================================
+
+extern float homeAOffset;
+extern float homeBOffset;
+extern float homeCOffset;
+
+// ============================================================
+// 电机运行变量
+// ============================================================
+
+extern float Vfoc;
+extern float Ifoc;
+
+extern uint8_t modeA;
+extern uint8_t modeB;
+extern uint8_t modeC;
+
+extern float targetVelA;
+extern float targetVelB;
+extern float targetVelC;
+
+extern float targetPosA;
+extern float targetPosB;
+extern float targetPosC;
+
+extern float targetIqA;
+extern float targetIqB;
+extern float targetIqC;
+
+extern bool sleepA;
+extern bool sleepB;
+extern bool sleepC;
+
+extern bool limitAUpper;
+extern bool limitALower;
+extern bool limitBUpper;
+extern bool limitBLower;
+extern bool limitCUpper;
+extern bool limitCLower;
+
+// ============================================================
+// Fault 运行变量
+// ============================================================
+
+extern bool currentFaultA;
+extern bool currentFaultB;
+extern bool currentFaultC;
+extern bool currentVonFault;
+
+extern bool latchFaultA;
+extern bool latchFaultB;
+extern bool latchFaultC;
+extern bool latchVonFault;
+
+extern uint64_t A_fault_time_ms;
+extern uint64_t B_fault_time_ms;
+extern uint64_t C_fault_time_ms;
+extern uint64_t Von_fault_time_ms;
+
+extern float Von_fault_value;
+extern bool systemProtected;
+
+// ============================================================
+// 函数声明
+// ============================================================
+
+// Time.ino
+extern bool timeSynced;
+extern int64_t timeOffsetMs;
+extern bool heartbeat;
+
+String msToTimestamp(uint64_t ms);
+uint64_t getCorrectedTimeMs();
+String getTimestampText();
+String getTimestampHeader();
+void syncHostTimeMs(uint64_t hostTimeMs);
+void syncHostTimeHms(uint8_t hh, uint8_t mm, uint8_t ss);
+String getTimeInfo();
+
+// Zero.ino
+void loadZeroOffsetsFromFlash();
+void saveZeroOffsetsToFlash();
+void printZeroOffsetsAtBoot();
+float normalizeToPi(float angle);
+float getRelativePosA();
+float getRelativePosB();
+float getRelativePosC();
+float getAbsoluteTargetA(float relativeTarget);
+float getAbsoluteTargetB(float relativeTarget);
+float getAbsoluteTargetC(float relativeTarget);
+String getCalibrationInfo();
+String setCurrentPositionAsZero(char axis);
+
+// Fault.ino
+float readVonVoltage();
+bool hasAnyFaultLatch();
+bool hasAnyCurrentFault();
+String getFaultBriefText();
+String getAxisFaultBriefText(char axis);
+bool updateFaultLatch();
+String getFaultInfo();
+String clearFaultLatch();
+bool canWakeNow();
+
+// Motor.ino
+String axisModeToString(uint8_t mode);
+void applyVfoc();
+void setVfoc(float value, uint8_t source);
+String getVfocInfo();
+void applyIfoc();
+void setIfoc(float value, uint8_t source);
+String getIfocInfo();
+void sleepAxis(char axis);
+bool wakeAxis(char axis);
+void sleepAllAxis();
+bool wakeAllAxis();
+String getAxisLimitText(bool upper, bool lower);
+void applyPositionSoftLimit();
+void setupDriver(BLDCDriver3PWM& driver);
+bool setupMotor(BLDCMotor& motor, BLDCDriver3PWM& driver, Sensor& sensor, float maxVel);
+void setAxisVelocity(char axis, float value, uint8_t source);
+void setAxisPosition(char axis, float value, uint8_t source);
+void setAxisDisplacement(char axis, float value, uint8_t source);
+void setAxisTorqueCurrent(char axis, float value, uint8_t source);
+void allTargetZero(uint8_t source);
+
+// Commu.ino
+void bleSendText(const String& msg);
+void setupBLE();
+void setupWiFi();
+void handleWiFiCommand();
+void handleSerialCommand();
+
+// Protocol.ino
+void sendReply(uint8_t source, const String& msg);
+void broadcastMsg(const String& msg);
+void broadcastRaw(const String& msg);
+String getWifiBriefText();
+String getStatusText();
+String getSingleAxisStatus(char axis);
+String getCommInfo();
+String getLimitInfo();
+String getCxkText();
+void handleCommand(String cmd, uint8_t source);
+void broadcastRunningStatus();

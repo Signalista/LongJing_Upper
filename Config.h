@@ -1,0 +1,167 @@
+#pragma once
+
+#include <Arduino.h>
+#include <SimpleFOC.h>
+#include <SPI.h>
+#include <Preferences.h>
+#include <WiFi.h>
+
+// ============================================================
+// 功能开关
+// ============================================================
+
+// 是否打开蓝牙
+#define ENABLE_BLE                 1
+
+// 1 = 启用 nFAULT / VON 故障检测与保护
+// 0 = 关闭故障检测，程序忽略故障并持续运行
+#define ENABLE_FAULT_CHECK         0
+
+// 是否打开WIFI/模式选择
+#define WIFI_MODE                  0
+#define WIFI_MODE_OFF              1   // WIFI关闭
+#define WIFI_MODE_ROUTER           1   // ESP32与上位机在同一路由器
+#define WIFI_MODE_PHONE            2   // ESP32连接上位机热点
+#define WIFI_MODE_AP               3   // 上位机连接ESP32热点
+
+// 回传是否加上时间戳
+#define IF_TIMESTAMP               1
+
+// // 0 = 上电后保持 SLEEP，需要 WAKE 指令才允许运动
+// // 1 = 上电后自动 WAKE
+// #define AUTO_WAKE_ON_BOOT          0
+
+// ============================================================
+// 电机参数和控制限制
+// ============================================================
+
+// 电机极对数
+#define MOTOR_A_POLE_PAIRS         7
+#define MOTOR_B_POLE_PAIRS         7
+#define MOTOR_C_POLE_PAIRS         7
+
+// 
+#define POWER_SUPPLY_VOLTAGE       12.0f
+#define FOC_VOLTAGE_LIMIT_DEFAULT  3.0f
+#define FOC_VOLTAGE_LIMIT_MAX      14.0f
+#define PWM_FREQUENCY              25000
+
+// 2804 motor parameters used by SimpleFOC estimated-current torque mode
+#define MOTOR_PHASE_RESISTANCE     2.55f      // Ohm, phase resistance (line-to-line is about 5.1 Ohm)
+#define MOTOR_KV_RATING            220.0f     // rpm/V
+#define MOTOR_LQ                   0.00086f   // H
+#define MOTOR_LD                   0.00086f   // H, no separate Ld measurement available
+#define FOC_CURRENT_LIMIT_DEFAULT  0.20f      // A, startup estimated-current limit
+#define FOC_CURRENT_LIMIT_MAX      0.40f      // A, maximum value accepted by IF command
+
+// 速度限制，单位 rad/s
+#define A_MAX_VEL                  6.28f
+#define B_MAX_VEL                  6.28f
+#define C_MAX_VEL                  6.28f
+
+// 位置软限位，单位 rad，相对于零位
+#define A_MIN_POS                 -800.0f
+#define A_MAX_POS                  800.0f
+#define B_MIN_POS                 -800.0f
+#define B_MAX_POS                  800.0f
+#define C_MIN_POS                 -800.0f
+#define C_MAX_POS                  800.0f
+
+// 母线电压保护阈值
+#define VON_MIN                    8.0f
+#define VON_MAX                    15.0f
+
+// ADC 换算参数
+#define ADC_REF_VOLTAGE            3.3f
+#define ADC_MAX_VALUE              4095.0f
+#define VON_R_HIGH                 56000.0f
+#define VON_R_LOW                  10000.0f
+#define VON_SCALE                  ((VON_R_HIGH + VON_R_LOW) / VON_R_LOW)
+
+// ============================================================
+// 自动广播时间设置，单位：ms
+// ============================================================
+
+#define DOT_TIME_MS                1000UL
+#define RUN_TIME_MS                10000UL
+#define STAT_TIME_MS               60000UL
+
+// ============================================================
+// BLE 参数，OTA 已删除，只保留普通控制通道
+// ============================================================
+
+#define DEVICE_NAME                "Upper1.1-FOC"
+
+#define SERVICE_UUID               "19161916-1916-1916-1916-aabbccdd0000"
+#define RX_CHAR_UUID               "19161916-1916-1916-1916-aabbccdd0001"
+#define TX_CHAR_UUID               "19161916-1916-1916-1916-aabbccdd0002"
+
+#if ENABLE_BLE
+#include <BLEDevice.h>
+#include <BLEServer.h>
+#include <BLEUtils.h>
+#include <BLE2902.h>
+#endif
+
+// ============================================================
+// WiFi 参数
+// ============================================================
+
+#define WIFI_ROUTER_SSID           "CZ1916"
+#define WIFI_ROUTER_PASS           "CZ19161916cz"
+
+#define WIFI_PHONE_SSID            "YourPhoneHotspot"
+#define WIFI_PHONE_PASS            "YourPhonePassword"
+
+#define WIFI_AP_SSID               "Upper1.1-FOC"
+#define WIFI_AP_PASS               "19168888"
+
+#define WIFI_TCP_PORT              5090
+
+// ============================================================
+// MT6701 SSI / SPI 管脚
+// ============================================================
+
+#define PIN_SPI_SCK                4
+#define PIN_SPI_MOSI               5
+#define PIN_SPI_MISO               6
+
+#define PIN_ENC_A_CS               7
+#define PIN_ENC_B_CS               15
+#define PIN_ENC_C_CS               16
+
+// ============================================================
+// MS8313 管脚
+// ============================================================
+
+// A 轴
+#define PIN_A_U                    9
+#define PIN_A_V                    10
+#define PIN_A_W                    11
+#define PIN_A_SLEEP                41
+#define PIN_A_FAULT                42
+
+// B 轴
+#define PIN_B_U                    12
+#define PIN_B_V                    13
+#define PIN_B_W                    14
+#define PIN_B_SLEEP                39
+#define PIN_B_FAULT                40
+
+// C 轴
+#define PIN_C_U                    21
+#define PIN_C_V                    47
+#define PIN_C_W                    48
+#define PIN_C_SLEEP                37
+#define PIN_C_FAULT                38
+
+// 母线电压采样
+#define PIN_VON_ADC                18
+
+// ============================================================
+// 运行模式定义
+// ============================================================
+
+#define AXIS_MODE_VELOCITY         0
+#define AXIS_MODE_POSITION         1
+#define AXIS_MODE_TORQUE           2   // Voltage torque mode: target is q-axis voltage Uq (V)
