@@ -446,7 +446,7 @@ float FOCMotor::angleOpenloop(float target_angle){
 void FOCMotor::updateVelocityLimit(float new_velocity_limit) {
   velocity_limit = new_velocity_limit;
   if(controller != MotionControlType::angle_nocascade) 
-    P_angle.limit = abs(velocity_limit); // if angle control but no velocity cascade, limit the angle controller by the velocity limit
+    PID_angle.limit = abs(velocity_limit); // if angle control but no velocity cascade, limit the angle controller by the velocity limit
 }
 
 // Update limit values in controllers when changed
@@ -457,7 +457,7 @@ void FOCMotor::updateCurrentLimit(float new_current_limit) {
     PID_velocity.limit = new_current_limit;
     if(controller == MotionControlType::angle_nocascade) 
       // if angle control but no velocity cascade, limit the angle controller by the current limit
-      P_angle.limit = new_current_limit;
+      PID_angle.limit = new_current_limit;
   }
 }
 
@@ -472,7 +472,7 @@ void FOCMotor::updateVoltageLimit(float new_voltage_limit) {
     PID_velocity.limit = new_voltage_limit;
     if(controller == MotionControlType::angle_nocascade) 
       // if angle control but no velocity cascade, limit the angle controller by the voltage limit
-      P_angle.limit = new_voltage_limit;
+      PID_angle.limit = new_voltage_limit;
   }
 }
 
@@ -720,7 +720,7 @@ void FOCMotor::move(float new_target) {
       // angle set point
       shaft_angle_sp = target;
       // calculate the torque command - sensor precision: this calculation is ok, but based on bad value from previous calculation
-      current_sp = P_angle(shaft_angle_sp - LPF_angle(shaft_angle));
+      current_sp = PID_angle(shaft_angle_sp - LPF_angle(shaft_angle));
       break;
     case MotionControlType::angle:
       // TODO sensor precision: this calculation is not numerically precise. The target value cannot express precise positions when
@@ -729,7 +729,7 @@ void FOCMotor::move(float new_target) {
       // angle set point
       shaft_angle_sp = target;
       // calculate velocity set point
-      shaft_velocity_sp = feed_forward_velocity + P_angle( shaft_angle_sp - LPF_angle(shaft_angle) );
+      shaft_velocity_sp = feed_forward_velocity + PID_angle( shaft_angle_sp - LPF_angle(shaft_angle) );
       shaft_velocity_sp = _constrain(shaft_velocity_sp, -velocity_limit, velocity_limit);
       // calculate the torque command - sensor precision: this calculation is ok, but based on bad value from previous calculation
       current_sp = PID_velocity(shaft_velocity_sp - shaft_velocity); 

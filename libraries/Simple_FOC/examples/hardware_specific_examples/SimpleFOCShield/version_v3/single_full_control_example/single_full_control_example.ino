@@ -57,7 +57,7 @@ void setup() {
   motor.LPF_velocity.Tf = 0.01f;
 
   // angle loop controller
-  motor.P_angle.P = 20;
+  motor.PID_angle.P = 20;
   // angle loop velocity limit
   motor.velocity_limit = 20;
 

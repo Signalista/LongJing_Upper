@@ -78,7 +78,7 @@ void setup() {
   motor.LPF_velocity.Tf = 0.01;
 
   // angle P controller
-  motor.P_angle.P = 20;
+  motor.PID_angle.P = 20;
   //  maximal velocity of the position control
   motor.velocity_limit = 4;
 

@@ -147,6 +147,7 @@ void setup()
   bool motorAReady = setupMotor(motorA, driverA, sensorA, A_MAX_VEL);
   bool motorBReady = setupMotor(motorB, driverB, sensorB, B_MAX_VEL);
   bool motorCReady = setupMotor(motorC, driverC, sensorC, C_MAX_VEL);
+  loadPidValuesFromFlash();
   Serial.print("FOC ready: A=");
   Serial.print(motorAReady);
   Serial.print(", B=");

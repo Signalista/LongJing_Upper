@@ -45,7 +45,7 @@ void setup() {
 	motor.PID_velocity.output_ramp = 1000;
 	motor.LPF_velocity.Tf = 0.01f;
 	motor.voltage_limit = 9;
-	//motor.P_angle.P = 20;
+	//motor.PID_angle.P = 20;
 	motor.init();
 	motor.initFOC();
 

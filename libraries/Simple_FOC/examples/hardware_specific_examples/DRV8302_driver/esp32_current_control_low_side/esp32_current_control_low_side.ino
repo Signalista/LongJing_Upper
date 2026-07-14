@@ -102,7 +102,7 @@ void setup() {
   // Low pass filtering time constant 
   motor.LPF_velocity.Tf = 0.02;
   // angle loop PID
-  motor.P_angle.P = 20.0;
+  motor.PID_angle.P = 20.0;
   // current q loop PID 
   motor.PID_current_q.P = 3.0;
   motor.PID_current_q.I = 100.0;

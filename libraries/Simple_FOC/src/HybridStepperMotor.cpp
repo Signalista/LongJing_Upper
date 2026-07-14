@@ -115,7 +115,7 @@ void HybridStepperMotor::enable()
   if(current_sense) current_sense->enable();
   // reset the pids
   PID_velocity.reset();
-  P_angle.reset();
+  PID_angle.reset();
   PID_current_q.reset();
   PID_current_d.reset();
   // motor status update

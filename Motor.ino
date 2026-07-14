@@ -16,6 +16,11 @@ BLDCMotor motorC(MOTOR_C_POLE_PAIRS, MOTOR_PHASE_RESISTANCE, MOTOR_KV_RATING, MO
 float Vfoc = FOC_VOLTAGE_LIMIT_DEFAULT;
 float Ifoc = FOC_CURRENT_LIMIT_DEFAULT;
 
+// PID gains are persisted in ESP32 NVS. The values in setupMotor() are used
+// only when no saved value exists yet.
+Preferences pidPrefs;
+static bool pidPrefsReady = false;
+
 // ============================================================
 // 电机目标和模式变量
 // ============================================================
@@ -128,6 +133,206 @@ String getIfocInfo() {
   String msg = "Ifoc=";
   msg += String(Ifoc, 4);
   return msg;
+}
+
+
+static BLDCMotor* getAxisMotor(char axis) {
+  if (axis == 'A') return &motorA;
+  if (axis == 'B') return &motorB;
+  if (axis == 'C') return &motorC;
+  return nullptr;
+}
+
+
+static PIDController* getAxisPid(BLDCMotor& motor, char loopType) {
+  if (loopType == 'V') return &motor.PID_velocity;
+  if (loopType == 'P') return &motor.PID_angle;
+  return nullptr;
+}
+
+
+static void makePidKey(char* key, char loopType, char axis, char gainType) {
+  key[0] = loopType;
+  key[1] = axis;
+  key[2] = gainType;
+  key[3] = '\0';
+}
+
+
+static bool ensurePidPrefsReady() {
+  if (pidPrefsReady) return true;
+  pidPrefsReady = pidPrefs.begin("pid", false);
+  return pidPrefsReady;
+}
+
+
+static void loadPidValuesForAxis(char loopType, char axis) {
+  BLDCMotor* motor = getAxisMotor(axis);
+  if (motor == nullptr) return;
+
+  PIDController* pid = getAxisPid(*motor, loopType);
+  if (pid == nullptr) return;
+
+  char key[4];
+  makePidKey(key, loopType, axis, 'P');
+  pid->P = pidPrefs.getFloat(key, pid->P);
+  makePidKey(key, loopType, axis, 'I');
+  pid->I = pidPrefs.getFloat(key, pid->I);
+  makePidKey(key, loopType, axis, 'D');
+  pid->D = pidPrefs.getFloat(key, pid->D);
+  pid->reset();
+}
+
+
+void loadPidValuesFromFlash() {
+  if (!ensurePidPrefsReady()) {
+    Serial.println("PID NVS open failed, using compiled defaults.");
+    return;
+  }
+
+  loadPidValuesForAxis('V', 'A');
+  loadPidValuesForAxis('V', 'B');
+  loadPidValuesForAxis('V', 'C');
+  loadPidValuesForAxis('P', 'A');
+  loadPidValuesForAxis('P', 'B');
+  loadPidValuesForAxis('P', 'C');
+  Serial.println("PID values loaded from NVS.");
+}
+
+
+static bool savePidValuesForAxis(char loopType, char axis) {
+  BLDCMotor* motor = getAxisMotor(axis);
+  if (motor == nullptr) return false;
+
+  PIDController* pid = getAxisPid(*motor, loopType);
+  if (pid == nullptr) return false;
+
+  char key[4];
+  makePidKey(key, loopType, axis, 'P');
+  bool savedP = pidPrefs.putFloat(key, pid->P) == sizeof(float);
+  makePidKey(key, loopType, axis, 'I');
+  bool savedI = pidPrefs.putFloat(key, pid->I) == sizeof(float);
+  makePidKey(key, loopType, axis, 'D');
+  bool savedD = pidPrefs.putFloat(key, pid->D) == sizeof(float);
+  return savedP && savedI && savedD;
+}
+
+
+static String getSinglePidInfo(char loopType, char axis) {
+  BLDCMotor* motor = getAxisMotor(axis);
+  if (motor == nullptr) return "ERR, UNKNOWN_AXIS";
+
+  PIDController* pid = getAxisPid(*motor, loopType);
+  if (pid == nullptr) return "ERR, UNKNOWN_PID_LOOP";
+
+  String msg = "";
+  msg += loopType;
+  msg += axis;
+  msg += "_PID=";
+  msg += String(pid->P, 4);
+  msg += ",";
+  msg += String(pid->I, 4);
+  msg += ",";
+  msg += String(pid->D, 4);
+  return msg;
+}
+
+
+String getPidInfo(char loopType, char axis) {
+  if (loopType != 'V' && loopType != 'P') {
+    return "ERR, UNKNOWN_PID_LOOP";
+  }
+
+  if (axis == '\0') {
+    String msg = getSinglePidInfo(loopType, 'A');
+    msg += "\n";
+    msg += getSinglePidInfo(loopType, 'B');
+    msg += "\n";
+    msg += getSinglePidInfo(loopType, 'C');
+    return msg;
+  }
+
+  return getSinglePidInfo(loopType, axis);
+}
+
+
+static bool applyPidValuesToAxis(char loopType, char axis, float p, float i, float d) {
+  BLDCMotor* motor = getAxisMotor(axis);
+  if (motor == nullptr) return false;
+
+  PIDController* pid = getAxisPid(*motor, loopType);
+  if (pid == nullptr) return false;
+
+  pid->P = p;
+  pid->I = i;
+  pid->D = d;
+
+  // Clear the old integral/derivative history so the new gain starts cleanly.
+  pid->reset();
+  return true;
+}
+
+
+bool setPidValues(char loopType, char axis, float p, float i, float d, uint8_t source) {
+  if ((loopType != 'V' && loopType != 'P') ||
+      (axis != '\0' && axis != 'A' && axis != 'B' && axis != 'C')) {
+    sendReply(source, "ERR, PID_FORMAT, USE_VPID<P,I,D>_OR_VAPID<P,I,D>");
+    return false;
+  }
+
+  if (!isfinite(p) || !isfinite(i) || !isfinite(d) ||
+      p < 0.0f || i < 0.0f || d < 0.0f) {
+    sendReply(source, "ERR, PID_VALUE, USE_FINITE_NONNEGATIVE_VALUE");
+    return false;
+  }
+
+  bool ok = true;
+  if (axis == '\0') {
+    ok = applyPidValuesToAxis(loopType, 'A', p, i, d) &&
+         applyPidValuesToAxis(loopType, 'B', p, i, d) &&
+         applyPidValuesToAxis(loopType, 'C', p, i, d);
+  } else {
+    ok = applyPidValuesToAxis(loopType, axis, p, i, d);
+  }
+
+  if (!ok) {
+    sendReply(source, "ERR, PID_SET_FAILED");
+    return false;
+  }
+
+  if (!ensurePidPrefsReady()) {
+    sendReply(source, "ERR, PID_NVS_OPEN_FAILED, RAM_UPDATED_NOT_SAVED");
+    return false;
+  }
+
+  bool saved = true;
+  if (axis == '\0') {
+    bool savedA = savePidValuesForAxis(loopType, 'A');
+    bool savedB = savePidValuesForAxis(loopType, 'B');
+    bool savedC = savePidValuesForAxis(loopType, 'C');
+    saved = savedA && savedB && savedC;
+  } else {
+    saved = savePidValuesForAxis(loopType, axis);
+  }
+
+  if (!saved) {
+    sendReply(source, "ERR, PID_NVS_WRITE_FAILED, RAM_UPDATED_NOT_FULLY_SAVED");
+    return false;
+  }
+
+  String msg = "OK, ";
+  msg += loopType;
+  if (axis != '\0') {
+    msg += axis;
+  }
+  msg += "_PID=";
+  msg += String(p, 4);
+  msg += ",";
+  msg += String(i, 4);
+  msg += ",";
+  msg += String(d, 4);
+  sendReply(source, msg);
+  return true;
 }
 
 
@@ -353,11 +558,11 @@ bool setupMotor(BLDCMotor& motor, BLDCDriver3PWM& driver, Sensor& sensor, float 
   motor.PID_velocity.limit = Vfoc;
   motor.PID_velocity.output_ramp = 100.0f;
 
-  motor.P_angle.P = 6.0f;
-  motor.P_angle.I = 0.0f;
-  motor.P_angle.D = 0.0f;
-  motor.P_angle.output_ramp = 100.0f;
-  motor.P_angle.limit = maxVel;
+  motor.PID_angle.P = 6.0f;
+  motor.PID_angle.I = 0.0f;
+  motor.PID_angle.D = 0.0f;
+  motor.PID_angle.output_ramp = 100.0f;
+  motor.PID_angle.limit = maxVel;
 
   motor.LPF_velocity.Tf = 0.02f;
 

@@ -146,7 +146,7 @@ void Commander::motor(FOCMotor* motor, char* user_command) {
     case CMD_A_PID:      //
       printVerbose(F("PID angle| "));
       if(sub_cmd == SCMD_LPF_TF) lpf(&motor->LPF_angle, &user_command[1]);
-      else pid(&motor->P_angle, &user_command[1]);
+      else pid(&motor->PID_angle, &user_command[1]);
       break;
     case CMD_LIMITS:      //
      printVerbose(F("Limits| "));

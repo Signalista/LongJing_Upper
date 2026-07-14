@@ -374,6 +374,42 @@ static bool parseFloatList(String text, float* values, uint8_t count) {
 }
 
 
+static bool parsePidValues(String text, float* values) {
+  text.replace("，", ",");
+  text.trim();
+
+  const char* cursor = text.c_str();
+
+  for (uint8_t index = 0; index < 3; index++) {
+    while (*cursor == ' ' || *cursor == '\t') cursor++;
+
+    char* endPtr = nullptr;
+    values[index] = strtof(cursor, &endPtr);
+    if (endPtr == cursor || !isfinite(values[index])) return false;
+    cursor = endPtr;
+
+    bool hadSpace = false;
+    while (*cursor == ' ' || *cursor == '\t') {
+      hadSpace = true;
+      cursor++;
+    }
+
+    if (index < 2) {
+      if (*cursor == ',' || *cursor == '/') {
+        cursor++;
+      } else if (!hadSpace) {
+        return false;
+      }
+    } else if (*cursor != '\0') {
+      return false;
+    }
+  }
+
+  while (*cursor == ' ' || *cursor == '\t') cursor++;
+  return *cursor == '\0';
+}
+
+
 void handleCommand(String cmd, uint8_t source) {
   cmd.trim();
 
@@ -465,6 +501,50 @@ void handleCommand(String cmd, uint8_t source) {
 
   if (upperCmd == "IF?") {
     sendReply(source, getIfocInfo());
+    return;
+  }
+
+  if (upperCmd == "VPID?") {
+    sendReply(source, getPidInfo('V', '\0'));
+    return;
+  }
+
+  if (upperCmd == "PPID?") {
+    sendReply(source, getPidInfo('P', '\0'));
+    return;
+  }
+
+  if (upperCmd.length() == 6 &&
+      (upperCmd.charAt(0) == 'V' || upperCmd.charAt(0) == 'P') &&
+      (upperCmd.charAt(1) == 'A' || upperCmd.charAt(1) == 'B' || upperCmd.charAt(1) == 'C') &&
+      upperCmd.substring(2) == "PID?") {
+    sendReply(source, getPidInfo(upperCmd.charAt(0), upperCmd.charAt(1)));
+    return;
+  }
+
+  bool isAllAxisPidSet = upperCmd.startsWith("VPID") || upperCmd.startsWith("PPID");
+  bool isSingleAxisPidSet = upperCmd.length() > 5 &&
+                            (upperCmd.charAt(0) == 'V' || upperCmd.charAt(0) == 'P') &&
+                            (upperCmd.charAt(1) == 'A' || upperCmd.charAt(1) == 'B' || upperCmd.charAt(1) == 'C') &&
+                            upperCmd.substring(2, 5) == "PID";
+
+  if (isAllAxisPidSet || isSingleAxisPidSet) {
+    char loopType = upperCmd.charAt(0);
+    char axis = isSingleAxisPidSet ? upperCmd.charAt(1) : '\0';
+    uint8_t valueStart = isSingleAxisPidSet ? 5 : 4;
+    float values[3] = {0.0f, 0.0f, 0.0f};
+
+    if (!parsePidValues(upperCmd.substring(valueStart), values)) {
+      sendReply(source, "ERR, PID_FORMAT, USE_VPID<P,I,D>_OR_VAPID<P,I,D>");
+      return;
+    }
+
+    setPidValues(loopType, axis, values[0], values[1], values[2], source);
+    return;
+  }
+
+  if (upperCmd.startsWith("PID") || upperCmd.indexOf("PID") >= 0) {
+    sendReply(source, "ERR, PID_FORMAT, USE_VPID<P,I,D>_OR_VAPID<P,I,D>");
     return;
   }
 
