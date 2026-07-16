@@ -45,6 +45,10 @@ extern BLDCMotor motorA;
 extern BLDCMotor motorB;
 extern BLDCMotor motorC;
 
+extern InlineCurrentSense currentSenseA;
+extern InlineCurrentSense currentSenseB;
+extern InlineCurrentSense currentSenseC;
+
 extern Preferences zeroPrefs;
 
 #if ENABLE_BLE
@@ -186,7 +190,11 @@ bool wakeAllAxis();
 String getAxisLimitText(bool upper, bool lower);
 void applyPositionSoftLimit();
 void setupDriver(BLDCDriver3PWM& driver);
-bool setupMotor(BLDCMotor& motor, BLDCDriver3PWM& driver, Sensor& sensor, float maxVel);
+bool setupMotor(BLDCMotor& motor,
+                BLDCDriver3PWM& driver,
+                Sensor& sensor,
+                InlineCurrentSense& currentSense,
+                float maxVel);
 void setAxisVelocity(char axis, float value, uint8_t source);
 void setAxisPosition(char axis, float value, uint8_t source);
 void setAxisDisplacement(char axis, float value, uint8_t source);
@@ -200,6 +208,11 @@ void setupWiFi();
 void handleWiFiCommand();
 void handleSerialCommand();
 
+// Led.ino
+void setupStatusLeds();
+void updateStatusLeds();
+void markCommunicationActivity();
+
 // Protocol.ino
 void sendReply(uint8_t source, const String& msg);
 void broadcastMsg(const String& msg);
@@ -209,6 +222,7 @@ String getStatusText();
 String getSingleAxisStatus(char axis);
 String getCommInfo();
 String getLimitInfo();
+String getCurrentInfo(char axis = '\0');
 String getCxkText();
 void handleCommand(String cmd, uint8_t source);
 void broadcastRunningStatus();

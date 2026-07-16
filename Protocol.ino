@@ -78,6 +78,8 @@ String getStatusText() {
   msg += String(getRelativePosA(), 4);
   msg += ", A_vel=";
   msg += String(motorA.shaft_velocity, 4);
+  msg += ", A_iq=";
+  msg += String(motorA.current.q, 4);
   msg += ", A_sleep=";
   msg += (sleepA ? "YES" : "NO");
   msg += ",\n";
@@ -86,6 +88,8 @@ String getStatusText() {
   msg += String(getRelativePosB(), 4);
   msg += ", B_vel=";
   msg += String(motorB.shaft_velocity, 4);
+  msg += ", B_iq=";
+  msg += String(motorB.current.q, 4);
   msg += ", B_sleep=";
   msg += (sleepB ? "YES" : "NO");
   msg += ", \n";
@@ -94,6 +98,8 @@ String getStatusText() {
   msg += String(getRelativePosC(), 4);
   msg += ", C_vel=";
   msg += String(motorC.shaft_velocity, 4);
+  msg += ", C_iq=";
+  msg += String(motorC.current.q, 4);
   msg += ", C_sleep=";
   msg += (sleepC ? "YES" : "NO");
   msg += ",\n";
@@ -134,6 +140,8 @@ String getSingleAxisStatus(char axis) {
   float targetVel = 0.0f;
   float targetPos = 0.0f;
   float targetIq = 0.0f;
+  float measuredId = 0.0f;
+  float measuredIq = 0.0f;
   String limit = "NONE";
   String sleep = "NO";
   String fault = "Perfect";
@@ -149,6 +157,8 @@ String getSingleAxisStatus(char axis) {
     targetVel = targetVelA;
     targetPos = targetPosA;
     targetIq = targetIqA;
+    measuredId = motorA.current.d;
+    measuredIq = motorA.current.q;
     limit = getAxisLimitText(limitAUpper, limitALower);
     sleep = (sleepA ? "YES" : "NO");
     fault = getAxisFaultBriefText('A');
@@ -163,6 +173,8 @@ String getSingleAxisStatus(char axis) {
     targetVel = targetVelB;
     targetPos = targetPosB;
     targetIq = targetIqB;
+    measuredId = motorB.current.d;
+    measuredIq = motorB.current.q;
     limit = getAxisLimitText(limitBUpper, limitBLower);
     sleep = (sleepB ? "YES" : "NO");
     fault = getAxisFaultBriefText('B');
@@ -177,6 +189,8 @@ String getSingleAxisStatus(char axis) {
     targetVel = targetVelC;
     targetPos = targetPosC;
     targetIq = targetIqC;
+    measuredId = motorC.current.d;
+    measuredIq = motorC.current.q;
     limit = getAxisLimitText(limitCUpper, limitCLower);
     sleep = (sleepC ? "YES" : "NO");
     fault = getAxisFaultBriefText('C');
@@ -203,6 +217,12 @@ String getSingleAxisStatus(char axis) {
   msg += String(targetVel, 4);
   msg += ", " + prefix + "_target_iq=";
   msg += String(targetIq, 4);
+  msg += ", \n";
+
+  msg += prefix + "_id=";
+  msg += String(measuredId, 4);
+  msg += ", " + prefix + "_iq=";
+  msg += String(measuredIq, 4);
   msg += ", \n";
 
   msg += prefix + "_MAX_POS=";
@@ -274,6 +294,29 @@ String getCommInfo() {
 }
 
 
+String getCurrentInfo(char axis) {
+  String msg = "";
+
+  if (axis == '\0' || axis == 'A') {
+    msg += "A_ID=" + String(motorA.current.d, 4);
+    msg += ", A_IQ=" + String(motorA.current.q, 4);
+  }
+  if (axis == '\0' || axis == 'B') {
+    if (msg.length() > 0) msg += "\n";
+    msg += "B_ID=" + String(motorB.current.d, 4);
+    msg += ", B_IQ=" + String(motorB.current.q, 4);
+  }
+  if (axis == '\0' || axis == 'C') {
+    if (msg.length() > 0) msg += "\n";
+    msg += "C_ID=" + String(motorC.current.d, 4);
+    msg += ", C_IQ=" + String(motorC.current.q, 4);
+  }
+
+  if (msg.length() == 0) return "ERR, UNKNOWN_AXIS";
+  return msg;
+}
+
+
 String getLimitInfo() {
   String msg = "";
 
@@ -317,6 +360,12 @@ String getLimitInfo() {
   msg += String(MOTOR_LQ, 6);
   msg += ", MOTOR_LD=";
   msg += String(MOTOR_LD, 6);
+  msg += ",\nTORQUE_CONTROL=FOC_CURRENT";
+  msg += ", CURRENT_SENSE=INLINE_INA240A2";
+  msg += ", SHUNT_OHM=";
+  msg += String(CURRENT_SHUNT_RESISTANCE, 4);
+  msg += ", GAIN=";
+  msg += String(CURRENT_SENSE_GAIN, 2);
 
   return msg;
 }
@@ -421,6 +470,8 @@ void handleCommand(String cmd, uint8_t source) {
     return;
   }
 
+  markCommunicationActivity();
+
   if (upperCmd == "HELLO 5090") {
     sendReply(source, "Hello wxy");
     return;
@@ -491,6 +542,16 @@ void handleCommand(String cmd, uint8_t source) {
 
   if (upperCmd == "LIMIT?") {
     sendReply(source, getLimitInfo());
+    return;
+  }
+
+  if (upperCmd == "CURR?") {
+    sendReply(source, getCurrentInfo());
+    return;
+  }
+
+  if (upperCmd == "CURRA?" || upperCmd == "CURRB?" || upperCmd == "CURRC?") {
+    sendReply(source, getCurrentInfo(upperCmd.charAt(4)));
     return;
   }
 

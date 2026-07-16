@@ -46,13 +46,20 @@
 #define FOC_VOLTAGE_LIMIT_MAX      14.0f
 #define PWM_FREQUENCY              25000
 
-// 2804 motor parameters used by SimpleFOC estimated-current torque mode
+// 2804 motor parameters used by SimpleFOC current and motion control
 #define MOTOR_PHASE_RESISTANCE     2.55f      // Ohm, phase resistance (line-to-line is about 5.1 Ohm)
 #define MOTOR_KV_RATING            220.0f     // rpm/V
 #define MOTOR_LQ                   0.00086f   // H
 #define MOTOR_LD                   0.00086f   // H, no separate Ld measurement available
-#define FOC_CURRENT_LIMIT_DEFAULT  0.20f      // A, startup estimated-current limit
+#define FOC_CURRENT_LIMIT_DEFAULT  0.20f      // A, startup current limit
 #define FOC_CURRENT_LIMIT_MAX      0.40f      // A, maximum value accepted by IF command
+
+// INA240A2 inline phase-current sensing: 20 mOhm shunt, gain 50 V/V.
+#define CURRENT_SHUNT_RESISTANCE   0.020f
+#define CURRENT_SENSE_GAIN         50.0f
+#define CURRENT_PID_P              3.0f
+#define CURRENT_PID_I              300.0f
+#define CURRENT_LPF_TF             0.002f
 
 // 速度限制，单位 rad/s
 #define A_MAX_VEL                  6.28f
@@ -90,7 +97,7 @@
 // BLE 参数，OTA 已删除，只保留普通控制通道
 // ============================================================
 
-#define DEVICE_NAME                "Upper1.1-FOC"
+#define DEVICE_NAME                "Upper2.0-FOC"
 
 #define SERVICE_UUID               "19161916-1916-1916-1916-aabbccdd0000"
 #define RX_CHAR_UUID               "19161916-1916-1916-1916-aabbccdd0001"
@@ -113,7 +120,7 @@
 #define WIFI_PHONE_SSID            "YourPhoneHotspot"
 #define WIFI_PHONE_PASS            "YourPhonePassword"
 
-#define WIFI_AP_SSID               "Upper1.1-FOC"
+#define WIFI_AP_SSID               "Upper2.0-FOC"
 #define WIFI_AP_PASS               "19168888"
 
 #define WIFI_TCP_PORT              5090
@@ -126,9 +133,9 @@
 #define PIN_SPI_MOSI               5
 #define PIN_SPI_MISO               6
 
-#define PIN_ENC_A_CS               7
-#define PIN_ENC_B_CS               15
-#define PIN_ENC_C_CS               16
+#define PIN_ENC_A_CS               17
+#define PIN_ENC_B_CS               35
+#define PIN_ENC_C_CS               36
 
 // ============================================================
 // MS8313 管脚
@@ -158,10 +165,24 @@
 // 母线电压采样
 #define PIN_VON_ADC                18
 
+// INA240A2 phase-current outputs (two shunts per axis)
+#define PIN_A_CURRENT_U            1
+#define PIN_A_CURRENT_V            2
+#define PIN_B_CURRENT_U            7
+#define PIN_B_CURRENT_V            8
+#define PIN_C_CURRENT_U            15
+#define PIN_C_CURRENT_V            16
+
+// Status LEDs, active HIGH
+#define PIN_LED1                   45
+#define PIN_LED2                   3
+#define LED1_TOGGLE_INTERVAL_MS    500UL
+#define LED2_HOLD_TIME_MS          500UL
+
 // ============================================================
 // 运行模式定义
 // ============================================================
 
 #define AXIS_MODE_VELOCITY         0
 #define AXIS_MODE_POSITION         1
-#define AXIS_MODE_TORQUE           2   // Voltage torque mode: target is q-axis voltage Uq (V)
+#define AXIS_MODE_TORQUE           2   // FOC current torque mode: target is q-axis current Iq (A)

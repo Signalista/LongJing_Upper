@@ -12,6 +12,13 @@ BLDCMotor motorA(MOTOR_A_POLE_PAIRS, MOTOR_PHASE_RESISTANCE, MOTOR_KV_RATING, MO
 BLDCMotor motorB(MOTOR_B_POLE_PAIRS, MOTOR_PHASE_RESISTANCE, MOTOR_KV_RATING, MOTOR_LQ, MOTOR_LD);
 BLDCMotor motorC(MOTOR_C_POLE_PAIRS, MOTOR_PHASE_RESISTANCE, MOTOR_KV_RATING, MOTOR_LQ, MOTOR_LD);
 
+InlineCurrentSense currentSenseA(CURRENT_SHUNT_RESISTANCE, CURRENT_SENSE_GAIN,
+                                 PIN_A_CURRENT_U, PIN_A_CURRENT_V);
+InlineCurrentSense currentSenseB(CURRENT_SHUNT_RESISTANCE, CURRENT_SENSE_GAIN,
+                                 PIN_B_CURRENT_U, PIN_B_CURRENT_V);
+InlineCurrentSense currentSenseC(CURRENT_SHUNT_RESISTANCE, CURRENT_SENSE_GAIN,
+                                 PIN_C_CURRENT_U, PIN_C_CURRENT_V);
+
 // 当前 FOC 最大输出电压，运行时可由 VF 指令修改，断电后恢复默认值
 float Vfoc = FOC_VOLTAGE_LIMIT_DEFAULT;
 float Ifoc = FOC_CURRENT_LIMIT_DEFAULT;
@@ -37,7 +44,7 @@ float targetPosA = 0.0f;
 float targetPosB = 0.0f;
 float targetPosC = 0.0f;
 
-// Estimated-current torque mode q-axis current commands, unit: A
+// FOC current torque mode q-axis current commands, unit: A
 float targetIqA = 0.0f;
 float targetIqB = 0.0f;
 float targetIqC = 0.0f;
@@ -77,13 +84,9 @@ void applyVfoc() {
   driverB.voltage_limit = Vfoc;
   driverC.voltage_limit = Vfoc;
 
-  motorA.voltage_limit = Vfoc;
-  motorB.voltage_limit = Vfoc;
-  motorC.voltage_limit = Vfoc;
-
-  motorA.PID_velocity.limit = Vfoc;
-  motorB.PID_velocity.limit = Vfoc;
-  motorC.PID_velocity.limit = Vfoc;
+  motorA.updateVoltageLimit(Vfoc);
+  motorB.updateVoltageLimit(Vfoc);
+  motorC.updateVoltageLimit(Vfoc);
 }
 
 
@@ -540,22 +543,31 @@ void setupDriver(BLDCDriver3PWM& driver) {
 }
 
 
-bool setupMotor(BLDCMotor& motor, BLDCDriver3PWM& driver, Sensor& sensor, float maxVel) {
+bool setupMotor(BLDCMotor& motor,
+                BLDCDriver3PWM& driver,
+                Sensor& sensor,
+                InlineCurrentSense& currentSense,
+                float maxVel) {
   motor.linkDriver(&driver);
   motor.linkSensor(&sensor);
+  currentSense.linkDriver(&driver);
+  if (!currentSense.init()) {
+    return false;
+  }
+  motor.linkCurrentSense(&currentSense);
 
   motor.voltage_limit = Vfoc;
   motor.velocity_limit = maxVel;
 
   motor.controller = MotionControlType::velocity;
-  motor.torque_controller = TorqueControlType::voltage;
+  motor.torque_controller = TorqueControlType::foc_current;
   motor.current_limit = Ifoc;
   motor.foc_modulation = FOCModulationType::SinePWM;
 
   motor.PID_velocity.P = 0.10f;
   motor.PID_velocity.I = 0.20f;
   motor.PID_velocity.D = 0.0f;
-  motor.PID_velocity.limit = Vfoc;
+  motor.PID_velocity.limit = Ifoc;
   motor.PID_velocity.output_ramp = 100.0f;
 
   motor.PID_angle.P = 6.0f;
@@ -565,6 +577,17 @@ bool setupMotor(BLDCMotor& motor, BLDCDriver3PWM& driver, Sensor& sensor, float 
   motor.PID_angle.limit = maxVel;
 
   motor.LPF_velocity.Tf = 0.02f;
+
+  motor.PID_current_q.P = CURRENT_PID_P;
+  motor.PID_current_q.I = CURRENT_PID_I;
+  motor.PID_current_q.D = 0.0f;
+  motor.PID_current_q.limit = Vfoc;
+  motor.PID_current_d.P = CURRENT_PID_P;
+  motor.PID_current_d.I = CURRENT_PID_I;
+  motor.PID_current_d.D = 0.0f;
+  motor.PID_current_d.limit = Vfoc;
+  motor.LPF_current_q.Tf = CURRENT_LPF_TF;
+  motor.LPF_current_d.Tf = CURRENT_LPF_TF;
 
   motor.useMonitoring(Serial);
 
@@ -600,13 +623,13 @@ void runAxisControl(BLDCMotor& motor,
 
 
 void setAxisTorqueCurrent(char axis, float value, uint8_t source) {
-  // Estimated-current mode: move() receives the requested q-axis current in A.
+  // FOC current mode: move() receives the requested q-axis current in A.
   float iq = constrain(value, -Ifoc, Ifoc);
 
   if (axis == 'A') {
     modeA = AXIS_MODE_TORQUE;
     motorA.updateCurrentLimit(Ifoc);
-    motorA.updateTorqueControlType(TorqueControlType::estimated_current);
+    motorA.updateTorqueControlType(TorqueControlType::foc_current);
     motorA.updateMotionControlType(MotionControlType::torque);
     targetIqA = iq;
     motorA.target = targetIqA;
@@ -614,7 +637,7 @@ void setAxisTorqueCurrent(char axis, float value, uint8_t source) {
   } else if (axis == 'B') {
     modeB = AXIS_MODE_TORQUE;
     motorB.updateCurrentLimit(Ifoc);
-    motorB.updateTorqueControlType(TorqueControlType::estimated_current);
+    motorB.updateTorqueControlType(TorqueControlType::foc_current);
     motorB.updateMotionControlType(MotionControlType::torque);
     targetIqB = iq;
     motorB.target = targetIqB;
@@ -622,7 +645,7 @@ void setAxisTorqueCurrent(char axis, float value, uint8_t source) {
   } else if (axis == 'C') {
     modeC = AXIS_MODE_TORQUE;
     motorC.updateCurrentLimit(Ifoc);
-    motorC.updateTorqueControlType(TorqueControlType::estimated_current);
+    motorC.updateTorqueControlType(TorqueControlType::foc_current);
     motorC.updateMotionControlType(MotionControlType::torque);
     targetIqC = iq;
     motorC.target = targetIqC;
@@ -636,7 +659,7 @@ void setAxisTorqueCurrent(char axis, float value, uint8_t source) {
 void setAxisVelocity(char axis, float value, uint8_t source) {
   if (axis == 'A') {
     modeA = AXIS_MODE_VELOCITY;
-    motorA.updateTorqueControlType(TorqueControlType::voltage);
+    motorA.updateTorqueControlType(TorqueControlType::foc_current);
     motorA.controller = MotionControlType::velocity;
     targetIqA = 0.0f;
     targetVelA = constrain(value, -A_MAX_VEL, A_MAX_VEL);
@@ -644,7 +667,7 @@ void setAxisVelocity(char axis, float value, uint8_t source) {
     sendReply(source, "OK, VA=" + String(targetVelA, 4));
   } else if (axis == 'B') {
     modeB = AXIS_MODE_VELOCITY;
-    motorB.updateTorqueControlType(TorqueControlType::voltage);
+    motorB.updateTorqueControlType(TorqueControlType::foc_current);
     motorB.controller = MotionControlType::velocity;
     targetIqB = 0.0f;
     targetVelB = constrain(value, -B_MAX_VEL, B_MAX_VEL);
@@ -652,7 +675,7 @@ void setAxisVelocity(char axis, float value, uint8_t source) {
     sendReply(source, "OK, VB=" + String(targetVelB, 4));
   } else if (axis == 'C') {
     modeC = AXIS_MODE_VELOCITY;
-    motorC.updateTorqueControlType(TorqueControlType::voltage);
+    motorC.updateTorqueControlType(TorqueControlType::foc_current);
     motorC.controller = MotionControlType::velocity;
     targetIqC = 0.0f;
     targetVelC = constrain(value, -C_MAX_VEL, C_MAX_VEL);
@@ -667,7 +690,7 @@ void setAxisVelocity(char axis, float value, uint8_t source) {
 void setAxisPosition(char axis, float value, uint8_t source) {
   if (axis == 'A') {
     modeA = AXIS_MODE_POSITION;
-    motorA.updateTorqueControlType(TorqueControlType::voltage);
+    motorA.updateTorqueControlType(TorqueControlType::foc_current);
     motorA.controller = MotionControlType::angle;
     targetIqA = 0.0f;
     targetPosA = constrain(value, A_MIN_POS, A_MAX_POS);
@@ -675,7 +698,7 @@ void setAxisPosition(char axis, float value, uint8_t source) {
     sendReply(source, "OK, PA=" + String(targetPosA, 4));
   } else if (axis == 'B') {
     modeB = AXIS_MODE_POSITION;
-    motorB.updateTorqueControlType(TorqueControlType::voltage);
+    motorB.updateTorqueControlType(TorqueControlType::foc_current);
     motorB.controller = MotionControlType::angle;
     targetIqB = 0.0f;
     targetPosB = constrain(value, B_MIN_POS, B_MAX_POS);
@@ -683,7 +706,7 @@ void setAxisPosition(char axis, float value, uint8_t source) {
     sendReply(source, "OK, PB=" + String(targetPosB, 4));
   } else if (axis == 'C') {
     modeC = AXIS_MODE_POSITION;
-    motorC.updateTorqueControlType(TorqueControlType::voltage);
+    motorC.updateTorqueControlType(TorqueControlType::foc_current);
     motorC.controller = MotionControlType::angle;
     targetIqC = 0.0f;
     targetPosC = constrain(value, C_MIN_POS, C_MAX_POS);
@@ -698,7 +721,7 @@ void setAxisPosition(char axis, float value, uint8_t source) {
 void setAxisDisplacement(char axis, float value, uint8_t source) {
   if (axis == 'A') {
     modeA = AXIS_MODE_POSITION;
-    motorA.updateTorqueControlType(TorqueControlType::voltage);
+    motorA.updateTorqueControlType(TorqueControlType::foc_current);
     motorA.controller = MotionControlType::angle;
     targetIqA = 0.0f;
     targetPosA = constrain(getRelativePosA() + value, A_MIN_POS, A_MAX_POS);
@@ -706,7 +729,7 @@ void setAxisDisplacement(char axis, float value, uint8_t source) {
     sendReply(source, "OK, PA=" + String(targetPosA, 4));
   } else if (axis == 'B') {
     modeB = AXIS_MODE_POSITION;
-    motorB.updateTorqueControlType(TorqueControlType::voltage);
+    motorB.updateTorqueControlType(TorqueControlType::foc_current);
     motorB.controller = MotionControlType::angle;
     targetIqB = 0.0f;
     targetPosB = constrain(getRelativePosB() + value, B_MIN_POS, B_MAX_POS);
@@ -714,7 +737,7 @@ void setAxisDisplacement(char axis, float value, uint8_t source) {
     sendReply(source, "OK, PB=" + String(targetPosB, 4));
   } else if (axis == 'C') {
     modeC = AXIS_MODE_POSITION;
-    motorC.updateTorqueControlType(TorqueControlType::voltage);
+    motorC.updateTorqueControlType(TorqueControlType::foc_current);
     motorC.controller = MotionControlType::angle;
     targetIqC = 0.0f;
     targetPosC = constrain(getRelativePosC() + value, C_MIN_POS, C_MAX_POS);
@@ -738,9 +761,9 @@ void allTargetZero(uint8_t source) {
   modeB = AXIS_MODE_POSITION;
   modeC = AXIS_MODE_POSITION;
 
-  motorA.updateTorqueControlType(TorqueControlType::voltage);
-  motorB.updateTorqueControlType(TorqueControlType::voltage);
-  motorC.updateTorqueControlType(TorqueControlType::voltage);
+  motorA.updateTorqueControlType(TorqueControlType::foc_current);
+  motorB.updateTorqueControlType(TorqueControlType::foc_current);
+  motorC.updateTorqueControlType(TorqueControlType::foc_current);
 
   motorA.controller = MotionControlType::angle;
   motorB.controller = MotionControlType::angle;

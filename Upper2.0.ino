@@ -82,11 +82,46 @@ bool heartbeat = 0;
 void setup() 
 {
   Serial.begin(115200);
+  setupStatusLeds();
   delay(100);
   Serial.println();
   Serial.println("ESP32-S3 WAKEUP");
   Serial.println("BLE OTA OFF.");
   Serial.println("FAULT N STOP OFF.");
+
+  // GPIO35/36/37 are available only when Octal PSRAM is disabled. Do not
+  // touch these shared pins if the board configuration enabled PSRAM.
+  if (ESP.getPsramSize() != 0) {
+    pinMode(PIN_A_SLEEP, OUTPUT);
+    pinMode(PIN_B_SLEEP, OUTPUT);
+    digitalWrite(PIN_A_SLEEP, LOW);
+    digitalWrite(PIN_B_SLEEP, LOW);
+    Serial.println("FATAL: PSRAM must be Disabled; GPIO35/36/37 are in use.");
+    while (true) {
+      updateStatusLeds();
+      delay(1);
+    }
+  }
+
+  // Establish safe levels before SPI and motor-driver initialisation.
+  pinMode(PIN_ENC_A_CS, OUTPUT);
+  pinMode(PIN_ENC_B_CS, OUTPUT);
+  pinMode(PIN_ENC_C_CS, OUTPUT);
+  digitalWrite(PIN_ENC_A_CS, HIGH);
+  digitalWrite(PIN_ENC_B_CS, HIGH);
+  digitalWrite(PIN_ENC_C_CS, HIGH);
+  pinMode(PIN_C_SLEEP, OUTPUT);
+  digitalWrite(PIN_C_SLEEP, LOW);
+  if (digitalRead(PIN_ENC_B_CS) != HIGH ||
+      digitalRead(PIN_ENC_C_CS) != HIGH ||
+      digitalRead(PIN_C_SLEEP) != LOW) {
+    Serial.println("FATAL: GPIO35/36/37 output self-check failed.");
+    while (true) {
+      updateStatusLeds();
+      delay(1);
+    }
+  }
+  Serial.println("PSRAM disabled; GPIO35/36/37 available.");
   
   // MS8313 管脚定义
   pinMode(PIN_A_SLEEP, OUTPUT);
@@ -144,9 +179,9 @@ void setup()
 
   // Motor 初始化
   Serial.println("Initializing motors...");
-  bool motorAReady = setupMotor(motorA, driverA, sensorA, A_MAX_VEL);
-  bool motorBReady = setupMotor(motorB, driverB, sensorB, B_MAX_VEL);
-  bool motorCReady = setupMotor(motorC, driverC, sensorC, C_MAX_VEL);
+  bool motorAReady = setupMotor(motorA, driverA, sensorA, currentSenseA, A_MAX_VEL);
+  bool motorBReady = setupMotor(motorB, driverB, sensorB, currentSenseB, B_MAX_VEL);
+  bool motorCReady = setupMotor(motorC, driverC, sensorC, currentSenseC, C_MAX_VEL);
   loadPidValuesFromFlash();
   Serial.print("FOC ready: A=");
   Serial.print(motorAReady);
@@ -173,6 +208,9 @@ void setup()
   sleepA = !motorAReady;
   sleepB = !motorBReady;
   sleepC = !motorCReady;
+  if (!motorAReady) digitalWrite(PIN_A_SLEEP, LOW);
+  if (!motorBReady) digitalWrite(PIN_B_SLEEP, LOW);
+  if (!motorCReady) digitalWrite(PIN_C_SLEEP, LOW);
   Serial.println("Closed-loop available");
   
   // motorA.target = getAbsoluteTargetA(0.0f);  // 相对0位角度改为绝对角度
@@ -210,6 +248,7 @@ void loop()
   static uint32_t lastStatTime = 0;
 
   uint32_t nowMs = millis();
+  updateStatusLeds();
 
   bool faultNow = updateFaultLatch();
   if (faultNow && !systemProtected) {
