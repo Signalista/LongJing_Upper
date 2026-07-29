@@ -10,7 +10,7 @@
 
 
 
-#include "communication/SimpleFOCDebug.h"
+#include "../../../communication/SimpleFOCDebug.h"
 #include "FspTimer.h"
 
 #define GPT_OPEN                                         (0x00475054ULL)

@@ -6,7 +6,7 @@
 #include "Arduino.h"
 #include "../stm32_mcu.h"
 #include "../../../../drivers/hardware_specific/stm32/stm32_mcu.h"
-#include "communication/SimpleFOCDebug.h"
+#include "../../../../communication/SimpleFOCDebug.h"
 #include "../stm32_adc_utils.h"
 
 #define _ADC_VOLTAGE 3.3f

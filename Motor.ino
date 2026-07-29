@@ -280,9 +280,8 @@ bool setPidValues(char loopType, char axis, float p, float i, float d, uint8_t s
     return false;
   }
 
-  if (!isfinite(p) || !isfinite(i) || !isfinite(d) ||
-      p < 0.0f || i < 0.0f || d < 0.0f) {
-    sendReply(source, "ERR, PID_VALUE, USE_FINITE_NONNEGATIVE_VALUE");
+  if (!isfinite(p) || !isfinite(i) || !isfinite(d)) {
+    sendReply(source, "ERR, PID_VALUE, USE_FINITE_VALUE");
     return false;
   }
 
@@ -359,6 +358,32 @@ void sleepAxis(char axis) {
 }
 
 
+static void syncPositionTargetAfterWake(char axis) {
+  if (axis == 'A' && modeA == AXIS_MODE_POSITION) {
+    motorA.updateTorqueControlType(TorqueControlType::voltage);
+    motorA.updateMotionControlType(MotionControlType::angle);
+    targetPosA = getRelativePosA();
+    motorA.target = getAbsoluteTargetA(targetPosA);
+    motorA.PID_angle.reset();
+    motorA.PID_velocity.reset();
+  } else if (axis == 'B' && modeB == AXIS_MODE_POSITION) {
+    motorB.updateTorqueControlType(TorqueControlType::voltage);
+    motorB.updateMotionControlType(MotionControlType::angle);
+    targetPosB = getRelativePosB();
+    motorB.target = getAbsoluteTargetB(targetPosB);
+    motorB.PID_angle.reset();
+    motorB.PID_velocity.reset();
+  } else if (axis == 'C' && modeC == AXIS_MODE_POSITION) {
+    motorC.updateTorqueControlType(TorqueControlType::voltage);
+    motorC.updateMotionControlType(MotionControlType::angle);
+    targetPosC = getRelativePosC();
+    motorC.target = getAbsoluteTargetC(targetPosC);
+    motorC.PID_angle.reset();
+    motorC.PID_velocity.reset();
+  }
+}
+
+
 bool wakeAxis(char axis) {
   if (axis == 'A') {
     digitalWrite(PIN_A_SLEEP, HIGH);
@@ -375,6 +400,7 @@ bool wakeAxis(char axis) {
         return false;
       }
     }
+    syncPositionTargetAfterWake('A');
     sleepA = false;
     return true;
   } else if (axis == 'B') {
@@ -392,6 +418,7 @@ bool wakeAxis(char axis) {
         return false;
       }
     }
+    syncPositionTargetAfterWake('B');
     sleepB = false;
     return true;
   } else if (axis == 'C') {
@@ -409,6 +436,7 @@ bool wakeAxis(char axis) {
         return false;
       }
     }
+    syncPositionTargetAfterWake('C');
     sleepC = false;
     return true;
   }
@@ -664,27 +692,37 @@ void setAxisVelocity(char axis, float value, uint8_t source) {
 }
 
 
+static void enterPositionMode(BLDCMotor& motor, uint8_t& axisMode) {
+  bool modeChanged =
+      axisMode != AXIS_MODE_POSITION ||
+      motor.controller != MotionControlType::angle;
+
+  motor.updateTorqueControlType(TorqueControlType::voltage);
+  motor.updateMotionControlType(MotionControlType::angle);
+  axisMode = AXIS_MODE_POSITION;
+
+  if (modeChanged) {
+    motor.PID_angle.reset();
+    motor.PID_velocity.reset();
+  }
+}
+
+
 void setAxisPosition(char axis, float value, uint8_t source) {
   if (axis == 'A') {
-    modeA = AXIS_MODE_POSITION;
-    motorA.updateTorqueControlType(TorqueControlType::voltage);
-    motorA.controller = MotionControlType::angle;
+    enterPositionMode(motorA, modeA);
     targetIqA = 0.0f;
     targetPosA = constrain(value, A_MIN_POS, A_MAX_POS);
     motorA.target = getAbsoluteTargetA(targetPosA);
     sendReply(source, "OK, PA=" + String(targetPosA, 4));
   } else if (axis == 'B') {
-    modeB = AXIS_MODE_POSITION;
-    motorB.updateTorqueControlType(TorqueControlType::voltage);
-    motorB.controller = MotionControlType::angle;
+    enterPositionMode(motorB, modeB);
     targetIqB = 0.0f;
     targetPosB = constrain(value, B_MIN_POS, B_MAX_POS);
     motorB.target = getAbsoluteTargetB(targetPosB);
     sendReply(source, "OK, PB=" + String(targetPosB, 4));
   } else if (axis == 'C') {
-    modeC = AXIS_MODE_POSITION;
-    motorC.updateTorqueControlType(TorqueControlType::voltage);
-    motorC.controller = MotionControlType::angle;
+    enterPositionMode(motorC, modeC);
     targetIqC = 0.0f;
     targetPosC = constrain(value, C_MIN_POS, C_MAX_POS);
     motorC.target = getAbsoluteTargetC(targetPosC);
@@ -697,25 +735,19 @@ void setAxisPosition(char axis, float value, uint8_t source) {
 
 void setAxisDisplacement(char axis, float value, uint8_t source) {
   if (axis == 'A') {
-    modeA = AXIS_MODE_POSITION;
-    motorA.updateTorqueControlType(TorqueControlType::voltage);
-    motorA.controller = MotionControlType::angle;
+    enterPositionMode(motorA, modeA);
     targetIqA = 0.0f;
     targetPosA = constrain(getRelativePosA() + value, A_MIN_POS, A_MAX_POS);
     motorA.target = getAbsoluteTargetA(targetPosA);
     sendReply(source, "OK, PA=" + String(targetPosA, 4));
   } else if (axis == 'B') {
-    modeB = AXIS_MODE_POSITION;
-    motorB.updateTorqueControlType(TorqueControlType::voltage);
-    motorB.controller = MotionControlType::angle;
+    enterPositionMode(motorB, modeB);
     targetIqB = 0.0f;
     targetPosB = constrain(getRelativePosB() + value, B_MIN_POS, B_MAX_POS);
     motorB.target = getAbsoluteTargetB(targetPosB);
     sendReply(source, "OK, PB=" + String(targetPosB, 4));
   } else if (axis == 'C') {
-    modeC = AXIS_MODE_POSITION;
-    motorC.updateTorqueControlType(TorqueControlType::voltage);
-    motorC.controller = MotionControlType::angle;
+    enterPositionMode(motorC, modeC);
     targetIqC = 0.0f;
     targetPosC = constrain(getRelativePosC() + value, C_MIN_POS, C_MAX_POS);
     motorC.target = getAbsoluteTargetC(targetPosC);
@@ -734,17 +766,9 @@ void allTargetZero(uint8_t source) {
   targetIqB = 0.0f;
   targetIqC = 0.0f;
 
-  modeA = AXIS_MODE_POSITION;
-  modeB = AXIS_MODE_POSITION;
-  modeC = AXIS_MODE_POSITION;
-
-  motorA.updateTorqueControlType(TorqueControlType::voltage);
-  motorB.updateTorqueControlType(TorqueControlType::voltage);
-  motorC.updateTorqueControlType(TorqueControlType::voltage);
-
-  motorA.controller = MotionControlType::angle;
-  motorB.controller = MotionControlType::angle;
-  motorC.controller = MotionControlType::angle;
+  enterPositionMode(motorA, modeA);
+  enterPositionMode(motorB, modeB);
+  enterPositionMode(motorC, modeC);
 
   motorA.target = getAbsoluteTargetA(0.0f);
   motorB.target = getAbsoluteTargetB(0.0f);

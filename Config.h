@@ -1,7 +1,7 @@
 #pragma once
 
 #include <Arduino.h>
-#include <SimpleFOC.h>
+#include "src/SimpleFOC.h"
 #include <SPI.h>
 #include <Preferences.h>
 #include <WiFi.h>

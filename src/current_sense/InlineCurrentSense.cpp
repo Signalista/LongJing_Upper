@@ -1,12 +1,12 @@
-#include "LowsideCurrentSense.h"
-#include "communication/SimpleFOCDebug.h"
-// LowsideCurrentSensor constructor
+#include "InlineCurrentSense.h"
+#include "../communication/SimpleFOCDebug.h"
+// InlineCurrentSensor constructor
 //  - shunt_resistor  - shunt resistor value
 //  - gain  - current-sense op-amp gain
 //  - phA   - A phase adc pin
 //  - phB   - B phase adc pin
 //  - phC   - C phase adc pin (optional)
-LowsideCurrentSense::LowsideCurrentSense(float _shunt_resistor, float _gain, int _pinA, int _pinB, int _pinC){
+InlineCurrentSense::InlineCurrentSense(float _shunt_resistor, float _gain, int _pinA, int _pinB, int _pinC){
     pinA = _pinA;
     pinB = _pinB;
     pinC = _pinC;
@@ -18,10 +18,10 @@ LowsideCurrentSense::LowsideCurrentSense(float _shunt_resistor, float _gain, int
     gain_a = volts_to_amps_ratio;
     gain_b = volts_to_amps_ratio;
     gain_c = volts_to_amps_ratio;
-}
+};
 
 
-LowsideCurrentSense::LowsideCurrentSense(float _mVpA, int _pinA, int _pinB, int _pinC){
+InlineCurrentSense::InlineCurrentSense(float _mVpA, int _pinA, int _pinB, int _pinC){
     pinA = _pinA;
     pinB = _pinB;
     pinC = _pinC;
@@ -31,24 +31,19 @@ LowsideCurrentSense::LowsideCurrentSense(float _mVpA, int _pinA, int _pinB, int 
     gain_a = volts_to_amps_ratio;
     gain_b = volts_to_amps_ratio;
     gain_c = volts_to_amps_ratio;
-}   
+};
 
 
-// Lowside sensor init function
-int LowsideCurrentSense::init(){
 
-    if (driver==nullptr) {
-        SIMPLEFOC_DEBUG("CUR: Driver not linked!");
-        return 0;
-    }
-
+// Inline sensor init function
+int InlineCurrentSense::init(){
+    // if no linked driver its fine in this case 
+    // at least for init()
+    void* drv_params = driver ? driver->params : nullptr;
     // configure ADC variables
-    params = _configureADCLowSide(driver->params,pinA,pinB,pinC);
+    params = _configureADCInline(drv_params,pinA,pinB,pinC);
     // if init failed return fail
     if (params == SIMPLEFOC_CURRENT_SENSE_INIT_FAILED) return 0; 
-    // sync the driver
-    void* r = _driverSyncLowSide(driver->params, params);
-    if(r == SIMPLEFOC_CURRENT_SENSE_INIT_FAILED) return 0; 
     // set the center pwm (0 voltage vector)
     if(driver_type==DriverType::BLDC)
         static_cast<BLDCDriver*>(driver)->setPwm(driver->voltage_limit/2, driver->voltage_limit/2, driver->voltage_limit/2);
@@ -63,19 +58,18 @@ int LowsideCurrentSense::init(){
     return 1;
 }
 // Function finding zero offsets of the ADC
-void LowsideCurrentSense::calibrateOffsets(){    
-    const int calibration_rounds = 2000;
-
+void InlineCurrentSense::calibrateOffsets(){
+    const int calibration_rounds = 1000;
+    
     // find adc offset = zero current voltage
     offset_ia = 0;
     offset_ib = 0;
     offset_ic = 0;
     // read the adc voltage 1000 times ( arbitrary number )
     for (int i = 0; i < calibration_rounds; i++) {
-        _startADC3PinConversionLowSide();
-        if(_isset(pinA)) offset_ia += (_readADCVoltageLowSide(pinA, params));
-        if(_isset(pinB)) offset_ib += (_readADCVoltageLowSide(pinB, params));
-        if(_isset(pinC)) offset_ic += (_readADCVoltageLowSide(pinC, params));
+        if(_isset(pinA)) offset_ia += _readADCVoltageInline(pinA, params);
+        if(_isset(pinB)) offset_ib += _readADCVoltageInline(pinB, params);
+        if(_isset(pinC)) offset_ic += _readADCVoltageInline(pinC, params);
         _delay(1);
     }
     // calculate the mean offsets
@@ -85,11 +79,10 @@ void LowsideCurrentSense::calibrateOffsets(){
 }
 
 // read all three phase currents (if possible 2 or 3)
-PhaseCurrent_s LowsideCurrentSense::getPhaseCurrents(){
+PhaseCurrent_s InlineCurrentSense::getPhaseCurrents(){
     PhaseCurrent_s current;
-    _startADC3PinConversionLowSide();
-    current.a = (!_isset(pinA)) ? 0 : (_readADCVoltageLowSide(pinA, params) - offset_ia)*gain_a;// amps
-    current.b = (!_isset(pinB)) ? 0 : (_readADCVoltageLowSide(pinB, params) - offset_ib)*gain_b;// amps
-    current.c = (!_isset(pinC)) ? 0 : (_readADCVoltageLowSide(pinC, params) - offset_ic)*gain_c; // amps
+    current.a = (!_isset(pinA)) ? 0 : (_readADCVoltageInline(pinA, params) - offset_ia)*gain_a;// amps
+    current.b = (!_isset(pinB)) ? 0 : (_readADCVoltageInline(pinB, params) - offset_ib)*gain_b;// amps
+    current.c = (!_isset(pinC)) ? 0 : (_readADCVoltageInline(pinC, params) - offset_ic)*gain_c; // amps
     return current;
 }

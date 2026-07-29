@@ -1,7 +1,7 @@
 #include "../../../hardware_api.h"
 #if defined(ARDUINO_B_G431B_ESC1)
 
-#include "communication/SimpleFOCDebug.h"
+#include "../../../../communication/SimpleFOCDebug.h"
 
 #include "stm32g4xx_hal.h"
 #include "stm32g4xx_ll_pwr.h"
