@@ -92,30 +92,7 @@ void setup()
   // GPIO35/36/37 are available only when Octal PSRAM is disabled. Do not
   // touch these shared pins if the board configuration enabled PSRAM.
   if (ESP.getPsramSize() != 0) {
-    pinMode(PIN_A_SLEEP, OUTPUT);
-    pinMode(PIN_B_SLEEP, OUTPUT);
-    digitalWrite(PIN_A_SLEEP, LOW);
-    digitalWrite(PIN_B_SLEEP, LOW);
     Serial.println("FATAL: PSRAM must be Disabled; GPIO35/36/37 are in use.");
-    while (true) {
-      updateStatusLeds();
-      delay(1);
-    }
-  }
-
-  // Establish safe levels before SPI and motor-driver initialisation.
-  pinMode(PIN_ENC_A_CS, OUTPUT);
-  pinMode(PIN_ENC_B_CS, OUTPUT);
-  pinMode(PIN_ENC_C_CS, OUTPUT);
-  digitalWrite(PIN_ENC_A_CS, HIGH);
-  digitalWrite(PIN_ENC_B_CS, HIGH);
-  digitalWrite(PIN_ENC_C_CS, HIGH);
-  pinMode(PIN_C_SLEEP, OUTPUT);
-  digitalWrite(PIN_C_SLEEP, LOW);
-  if (digitalRead(PIN_ENC_B_CS) != HIGH ||
-      digitalRead(PIN_ENC_C_CS) != HIGH ||
-      digitalRead(PIN_C_SLEEP) != LOW) {
-    Serial.println("FATAL: GPIO35/36/37 output self-check failed.");
     while (true) {
       updateStatusLeds();
       delay(1);
@@ -208,9 +185,6 @@ void setup()
   sleepA = !motorAReady;
   sleepB = !motorBReady;
   sleepC = !motorCReady;
-  if (!motorAReady) digitalWrite(PIN_A_SLEEP, LOW);
-  if (!motorBReady) digitalWrite(PIN_B_SLEEP, LOW);
-  if (!motorCReady) digitalWrite(PIN_C_SLEEP, LOW);
   Serial.println("Closed-loop available");
   
   // motorA.target = getAbsoluteTargetA(0.0f);  // 相对0位角度改为绝对角度

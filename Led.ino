@@ -10,7 +10,8 @@ void setupStatusLeds() {
   pinMode(PIN_LED2, OUTPUT);
   led1State = true;
   digitalWrite(PIN_LED1, HIGH);
-  digitalWrite(PIN_LED2, LOW);
+  // Hardware diagnostic: keep LED2 continuously active HIGH.
+  digitalWrite(PIN_LED2, HIGH);
   lastLed1ToggleMs = millis();
 }
 
@@ -29,8 +30,5 @@ void updateStatusLeds() {
     digitalWrite(PIN_LED1, led1State ? HIGH : LOW);
   }
 
-  if (led2Active && nowMs - lastCommunicationMs >= LED2_HOLD_TIME_MS) {
-    led2Active = false;
-    digitalWrite(PIN_LED2, LOW);
-  }
+  // LED2 is intentionally kept on for the current hardware diagnostic.
 }

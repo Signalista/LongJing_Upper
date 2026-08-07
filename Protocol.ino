@@ -294,25 +294,22 @@ String getCommInfo() {
 }
 
 
-String getCurrentInfo(char axis) {
+String getCurrentInfo() {
+  PhaseCurrent_s currentA = currentSenseA.getPhaseCurrents();
+  PhaseCurrent_s currentB = currentSenseB.getPhaseCurrents();
+  PhaseCurrent_s currentC = currentSenseC.getPhaseCurrents();
   String msg = "";
 
-  if (axis == '\0' || axis == 'A') {
-    msg += "A_ID=" + String(motorA.current.d, 4);
-    msg += ", A_IQ=" + String(motorA.current.q, 4);
-  }
-  if (axis == '\0' || axis == 'B') {
-    if (msg.length() > 0) msg += "\n";
-    msg += "B_ID=" + String(motorB.current.d, 4);
-    msg += ", B_IQ=" + String(motorB.current.q, 4);
-  }
-  if (axis == '\0' || axis == 'C') {
-    if (msg.length() > 0) msg += "\n";
-    msg += "C_ID=" + String(motorC.current.d, 4);
-    msg += ", C_IQ=" + String(motorC.current.q, 4);
-  }
+  msg += "A_iu=" + String(currentA.a, 4);
+  msg += ", A_iv=" + String(currentA.b, 4);
+  msg += ", A_iw=" + String(-currentA.a - currentA.b, 4);
+  msg += "\nB_iu=" + String(currentB.a, 4);
+  msg += ", B_iv=" + String(currentB.b, 4);
+  msg += ", B_iw=" + String(-currentB.a - currentB.b, 4);
+  msg += "\nC_iu=" + String(currentC.a, 4);
+  msg += ", C_iv=" + String(currentC.b, 4);
+  msg += ", C_iw=" + String(-currentC.a - currentC.b, 4);
 
-  if (msg.length() == 0) return "ERR, UNKNOWN_AXIS";
   return msg;
 }
 
@@ -434,7 +431,7 @@ static bool parsePidValues(String text, float* values) {
 
     char* endPtr = nullptr;
     values[index] = strtof(cursor, &endPtr);
-    if (endPtr == cursor || !isfinite(values[index])) return false;
+    if (endPtr == cursor) return false;
     cursor = endPtr;
 
     bool hadSpace = false;
@@ -509,18 +506,12 @@ void handleCommand(String cmd, uint8_t source) {
 
   if (upperCmd == "ENC?") {
     String msg = "";
-    msg += "sensorA_single=";
+    msg += "sensorA=";
     msg += String(sensorA.getSensorAngle(), 6);
-    msg += ", sensorA_multi=";
-    msg += String(sensorA.getAngle(), 6);
-    msg += ", sensorB_single=";
+    msg += ", sensorB=";
     msg += String(sensorB.getSensorAngle(), 6);
-    msg += ", sensorB_multi=";
-    msg += String(sensorB.getAngle(), 6);
-    msg += ", sensorC_single=";
+    msg += ", sensorC=";
     msg += String(sensorC.getSensorAngle(), 6);
-    msg += ", sensorC_multi=";
-    msg += String(sensorC.getAngle(), 6);
     sendReply(source, msg);
     return;
   }
@@ -545,13 +536,8 @@ void handleCommand(String cmd, uint8_t source) {
     return;
   }
 
-  if (upperCmd == "CURR?") {
+  if (upperCmd == "CUR?") {
     sendReply(source, getCurrentInfo());
-    return;
-  }
-
-  if (upperCmd == "CURRA?" || upperCmd == "CURRB?" || upperCmd == "CURRC?") {
-    sendReply(source, getCurrentInfo(upperCmd.charAt(4)));
     return;
   }
 
