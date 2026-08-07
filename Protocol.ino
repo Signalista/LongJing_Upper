@@ -458,18 +458,12 @@ void handleCommand(String cmd, uint8_t source) {
 
   if (upperCmd == "ENC?") {
     String msg = "";
-    msg += "sensorA_single=";
+    msg += "sensorA=";
     msg += String(sensorA.getSensorAngle(), 6);
-    msg += ", sensorA_multi=";
-    msg += String(sensorA.getAngle(), 6);
-    msg += ", sensorB_single=";
+    msg += ", sensorB=";
     msg += String(sensorB.getSensorAngle(), 6);
-    msg += ", sensorB_multi=";
-    msg += String(sensorB.getAngle(), 6);
-    msg += ", sensorC_single=";
+    msg += ", sensorC=";
     msg += String(sensorC.getSensorAngle(), 6);
-    msg += ", sensorC_multi=";
-    msg += String(sensorC.getAngle(), 6);
     sendReply(source, msg);
     return;
   }
