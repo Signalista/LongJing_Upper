@@ -9,7 +9,7 @@
 //
 // 0、下载与重启
 //   BOOT 接 GND，EN 触碰 V3 复位，进入下载模式。
-//   BOOT 接 V33，EN 触碰 V3复位，进入工作模式。
+//   BOOT 接 V33，EN 触碰 V3 复位，进入工作模式。
 //
 // 1、USB 串口
 //    Baud Rate: 115200
@@ -82,6 +82,13 @@ bool heartbeat = 0;
 void setup() 
 {
   Serial.begin(115200);
+#if ARDUINO_USB_CDC_ON_BOOT
+  // Hardware CDC can report "connected" as soon as Windows enumerates the
+  // device, even when no terminal has opened the COM port.  Keep enough room
+  // for all boot messages and never wait for a host reader.
+  Serial.setTxBufferSize(8192);
+  Serial.setTxTimeoutMs(0);
+#endif
   setupStatusLeds();
   delay(100);
   Serial.println();

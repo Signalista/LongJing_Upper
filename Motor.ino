@@ -612,7 +612,11 @@ bool setupMotor(BLDCMotor& motor,
   motor.LPF_current_q.Tf = CURRENT_LPF_TF;
   motor.LPF_current_d.Tf = CURRENT_LPF_TF;
 
-  motor.useMonitoring(Serial);
+  // Do not attach SimpleFOC's verbose monitor to USB CDC.  On ESP32-S3 the
+  // hardware CDC link may look connected when Windows has enumerated it but
+  // no terminal is reading, which can fill the TX path during initFOC().
+  // Protocol replies and the firmware's own concise diagnostics still use
+  // Serial normally.
 
   int initOk = motor.init();
   int focOk = 0;
