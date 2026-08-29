@@ -41,7 +41,7 @@
 #define MOTOR_C_POLE_PAIRS         7
 
 // 
-#define POWER_SUPPLY_VOLTAGE       12.0f
+#define POWER_SUPPLY_VOLTAGE       15.0f
 #define FOC_VOLTAGE_LIMIT_DEFAULT  3.0f
 #define FOC_VOLTAGE_LIMIT_MAX      14.0f
 #define PWM_FREQUENCY              25000
@@ -52,7 +52,7 @@
 #define MOTOR_LQ                   0.00086f   // H
 #define MOTOR_LD                   0.00086f   // H, no separate Ld measurement available
 #define FOC_CURRENT_LIMIT_DEFAULT  0.20f      // A, startup current limit
-#define FOC_CURRENT_LIMIT_MAX      0.40f      // A, maximum value accepted by IF command
+#define FOC_CURRENT_LIMIT_MAX      2.00f      // A, maximum value accepted by IF command
 
 // INA240A2 inline phase-current sensing: 20 mOhm shunt, gain 50 V/V.
 #define CURRENT_SHUNT_RESISTANCE   0.020f
